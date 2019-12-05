@@ -12,14 +12,14 @@ impl Solver for Problem {
     type Output1 = i32;
     type Output2 = i32;
 
-    fn parse_input<R: io::Read>(&self, r: R) -> Vec<i32> {
+    fn parse_input<R: io::Read>(&self, r: R) -> Self::Input {
         let mut r = BufReader::new(r);
         let mut s = String::new();
         r.read_to_string(&mut s).unwrap();
         s.split(',').flat_map(|n| n.parse()).collect()
     }
 
-    fn solve_first(&self, input: &Vec<i32>) -> i32 {
+    fn solve_first(&self, input: &Self::Input) -> Self::Output1 {
         let mut memory = input.clone();
         memory[1] = 12;
         memory[2] = 2;
@@ -33,7 +33,7 @@ impl Solver for Problem {
         program.memory[0]
     }
 
-    fn solve_second(&self, input: &Vec<i32>) -> i32 {
+    fn solve_second(&self, input: &Self::Input) -> Self::Output2 {
         for noun in  0..99 {
             for verb in 0..99 {
                 let mut memory = input.clone();
@@ -52,6 +52,7 @@ impl Solver for Problem {
                 }
             }
         }
+
         unreachable!();
     }
 }

@@ -10,16 +10,16 @@ impl Solver for Problem {
     type Output1 = i64;
     type Output2 = i64;
 
-    fn parse_input<R: io::Read>(&self, r: R) -> Vec<i64> {
+    fn parse_input<R: io::Read>(&self, r: R) -> Self::Input {
         let r = BufReader::new(r);
         r.lines().flatten().flat_map(|l| l.parse()).collect()
     }
 
-    fn solve_first(&self, input: &Vec<i64>) -> i64 {
+    fn solve_first(&self, input: &Self::Input) -> Self::Output1 {
         Iterator::sum(input.iter().map(|n| n / 3 - 2))
     }
 
-    fn solve_second(&self, input: &Vec<i64>) -> i64 {
+    fn solve_second(&self, input: &Self::Input) -> Self::Output2 {
         let mut total = 0;
 
         for n in input {
