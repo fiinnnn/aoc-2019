@@ -1,5 +1,6 @@
 mod solutions;
 mod solver;
+mod intcode_computer;
 
 use std::env;
 use crate::solutions::exec_day;
