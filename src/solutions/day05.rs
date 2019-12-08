@@ -1,9 +1,5 @@
 use crate::solver::Solver;
-use std::io::{
-    self,
-    BufReader,
-    Read
-};
+use std::io::{self, BufReader, Read};
 use crate::intcode_computer::IntcodeComputer;
 
 pub struct Problem;

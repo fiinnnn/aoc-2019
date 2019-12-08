@@ -1,9 +1,11 @@
 use crate::solver::Solver;
-use std::io::{self, BufReader, BufRead};
-use std::str::FromStr;
-use std::collections::HashSet;
-use std::iter::FromIterator;
-use std::hash::{Hash, Hasher};
+use std::{
+    io::{self, BufReader, BufRead},
+    str::FromStr,
+    collections::HashSet,
+    iter::FromIterator,
+    hash::{Hash, Hasher}
+};
 
 pub struct Problem;
 
