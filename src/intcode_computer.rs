@@ -13,25 +13,28 @@ pub fn read_program<R: Read>(r: R) -> Vec<i64> {
 
 #[derive(Debug, Eq, PartialEq)]
 enum Instruction {
-    ADD((ParameterMode, ParameterMode)),
-    MUL((ParameterMode, ParameterMode)),
+    ADD((ParameterMode, ParameterMode, ParameterMode)),
+    MUL((ParameterMode, ParameterMode, ParameterMode)),
 
-    IN,
+    IN(ParameterMode),
     OUT(ParameterMode),
 
     JNZ((ParameterMode, ParameterMode)),
     JEZ((ParameterMode, ParameterMode)),
 
-    LT((ParameterMode, ParameterMode)),
-    EQ((ParameterMode, ParameterMode)),
+    LT((ParameterMode, ParameterMode, ParameterMode)),
+    EQ((ParameterMode, ParameterMode, ParameterMode)),
 
-    HALT
+    ARB(ParameterMode),
+
+    HLT
 }
 
 #[derive(Debug, Eq, PartialEq)]
 enum ParameterMode {
     Position,
     Immediate,
+    Relative,
 }
 
 impl From<i64> for ParameterMode {
@@ -39,6 +42,7 @@ impl From<i64> for ParameterMode {
         match n {
             0 => ParameterMode::Position,
             1 => ParameterMode::Immediate,
+            2 => ParameterMode::Relative,
             _ => panic!("Unknown parameter mode: {}", n),
         }
     }
@@ -47,18 +51,20 @@ impl From<i64> for ParameterMode {
 fn decode_instruction(instruction: i64) -> Instruction {
     let param_mode_1 = ((instruction / 100) % 10).into();
     let param_mode_2 = ((instruction / 1000) % 10).into();
+    let param_mode_3 = ((instruction / 10000) % 10).into();
 
     let opcode = instruction % 100;
     match opcode {
-        1 => Instruction::ADD((param_mode_1, param_mode_2)),
-        2 => Instruction::MUL((param_mode_1, param_mode_2)),
-        3 => Instruction::IN,
+        1 => Instruction::ADD((param_mode_1, param_mode_2, param_mode_3)),
+        2 => Instruction::MUL((param_mode_1, param_mode_2, param_mode_3)),
+        3 => Instruction::IN(param_mode_1),
         4 => Instruction::OUT(param_mode_1),
         5 => Instruction::JNZ((param_mode_1, param_mode_2)),
         6 => Instruction::JEZ((param_mode_1, param_mode_2)),
-        7 => Instruction::LT((param_mode_1, param_mode_2)),
-        8 => Instruction::EQ((param_mode_1, param_mode_2)),
-        99 => Instruction::HALT,
+        7 => Instruction::LT((param_mode_1, param_mode_2, param_mode_3)),
+        8 => Instruction::EQ((param_mode_1, param_mode_2, param_mode_3)),
+        9 => Instruction::ARB(param_mode_1),
+        99 => Instruction::HLT,
         _ => panic!("Unknown opcode: {}", opcode),
     }
 }
@@ -204,15 +210,17 @@ pub struct IntcodeComputer<T>
     pub io: T,
     memory: Vec<i64>,
     pc: usize,
+    rel_base: i64,
 }
 
 impl<T> IntcodeComputer<T>
     where T: IO {
     pub fn new(memory: &mut Vec<i64>, io: T) -> IntcodeComputer<T> {
         IntcodeComputer {
+            io,
             memory: memory.clone(),
             pc: 0,
-            io,
+            rel_base: 0,
         }
     }
 
@@ -229,8 +237,8 @@ impl<T> IntcodeComputer<T>
                     self.multiply(modes);
                     self.inc_pc(4);
                 }
-                Instruction::IN => {
-                    self.input();
+                Instruction::IN(mode) => {
+                    self.input(mode);
                     self.inc_pc(2);
                 }
                 Instruction::OUT(mode) => {
@@ -251,16 +259,28 @@ impl<T> IntcodeComputer<T>
                     self.equals(modes);
                     self.inc_pc(4);
                 }
-                Instruction::HALT => break,
+                Instruction::ARB(mode) => {
+                    self.adjust_rel_base(mode);
+                    self.inc_pc(2);
+                }
+                Instruction::HLT => break,
             }
         }
     }
 
     pub fn read(&self, addr: usize) -> i64 {
+        if addr >= self.memory.len() {
+            return 0;
+        }
+
         self.memory[addr]
     }
 
     pub fn write(&mut self, addr: usize, val: i64) {
+        if addr >= self.memory.len() {
+            self.memory.resize(addr + 1, 0);
+        }
+
         self.memory[addr] = val;
     }
 
@@ -272,13 +292,14 @@ impl<T> IntcodeComputer<T>
         self.pc = self.pc.wrapping_add(amount);
     }
 
-    fn get_params_3(&self, (m1, m2): (ParameterMode, ParameterMode)) -> (i64, i64, usize) {
+    fn get_params_3(&self, (m1, m2, m3): (ParameterMode, ParameterMode, ParameterMode)) -> (i64, i64, usize) {
         let param1 = self.read(self.pc + 1);
         let param2 = self.read(self.pc + 2);
-        let addr = self.read(self.pc + 3) as usize;
+        let param3 = self.read(self.pc + 3);
 
         let p1 = self.get_val(param1, m1);
         let p2 = self.get_val(param2, m2);
+        let addr = self.get_dest(param3, m3);
 
         (p1, p2, addr)
     }
@@ -297,21 +318,30 @@ impl<T> IntcodeComputer<T>
         match mode {
             ParameterMode::Position => self.read(param as usize),
             ParameterMode::Immediate => param,
+            ParameterMode::Relative => self.read((self.rel_base + param) as usize),
         }
     }
 
-    fn add(&mut self, modes: (ParameterMode, ParameterMode)) {
+    fn get_dest(&self, param: i64, mode: ParameterMode) -> usize {
+        match mode {
+            ParameterMode::Position => param as usize,
+            ParameterMode::Immediate => panic!("Not supported"),
+            ParameterMode::Relative => (self.rel_base + param) as usize,
+        }
+    }
+
+    fn add(&mut self, modes: (ParameterMode, ParameterMode, ParameterMode)) {
         let (p1, p2, addr) = self.get_params_3(modes);
         self.write(addr, p1 + p2);
     }
 
-    fn multiply(&mut self, modes: (ParameterMode, ParameterMode)) {
+    fn multiply(&mut self, modes: (ParameterMode, ParameterMode, ParameterMode)) {
         let (p1, p2, addr) = self.get_params_3(modes);
         self.write(addr, p1 * p2);
     }
 
-    fn input(&mut self) {
-        let addr = self.read(self.pc + 1) as usize;
+    fn input(&mut self,  mode: ParameterMode) {
+        let addr = self.get_dest(self.read(self.pc + 1), mode) as usize;
         let val = self.io.pop_input();
         self.write(addr, val);
     }
@@ -341,7 +371,7 @@ impl<T> IntcodeComputer<T>
         }
     }
 
-    fn less_than(&mut self, modes: (ParameterMode, ParameterMode)) {
+    fn less_than(&mut self, modes: (ParameterMode, ParameterMode, ParameterMode)) {
         let (p1, p2, addr) = self.get_params_3(modes);
         let mut output = 0;
         if p1 < p2 {
@@ -350,13 +380,18 @@ impl<T> IntcodeComputer<T>
         self.write(addr, output);
     }
 
-    fn equals(&mut self, modes: (ParameterMode, ParameterMode)) {
+    fn equals(&mut self, modes: (ParameterMode, ParameterMode, ParameterMode)) {
         let (p1, p2, addr) = self.get_params_3(modes);
         let mut output = 0;
         if p1 == p2 {
             output = 1;
         }
         self.write(addr, output);
+    }
+
+    fn adjust_rel_base(&mut self, mode: ParameterMode) {
+        let val = self.get_val(self.read(self.pc + 1 as usize), mode);
+        self.rel_base = self.rel_base + val;
     }
 }
 
@@ -370,15 +405,26 @@ mod tests {
             decode_instruction(1002),
             Instruction::MUL(
                 (ParameterMode::Position,
-                 ParameterMode::Immediate))
+                 ParameterMode::Immediate,
+                 ParameterMode::Position))
         );
 
         assert_eq!(
             decode_instruction(1108),
             Instruction::EQ(
                 (ParameterMode::Immediate,
-                 ParameterMode::Immediate))
+                 ParameterMode::Immediate,
+                 ParameterMode::Position))
         );
+
+        assert_eq!(
+            decode_instruction(2002),
+            Instruction::MUL(
+                (ParameterMode::Position,
+                 ParameterMode::Relative,
+                 ParameterMode::Position)
+            )
+        )
     }
 
     fn test_program(mut program: Vec<i64>, expected_output: Vec<i64>) {
