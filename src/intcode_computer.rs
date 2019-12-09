@@ -1,8 +1,14 @@
-pub struct IntcodeComputer {
-    memory: Vec<i64>,
-    pc: usize,
-    input: i64,
-    output: Vec<i64>,
+use std::io::{BufReader, Read, BufRead};
+use std::collections::VecDeque;
+use std::sync::mpsc::{channel, Sender, Receiver};
+
+pub fn read_program<R: Read>(r: R) -> Vec<i64> {
+    BufReader::new(r)
+        .split(b',')
+        .flatten()
+        .flat_map(String::from_utf8)
+        .flat_map(|s| s.parse())
+        .collect()
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -57,13 +63,156 @@ fn decode_instruction(instruction: i64) -> Instruction {
     }
 }
 
-impl IntcodeComputer {
-    pub fn new(memory: &mut Vec<i64>, input: i64) -> IntcodeComputer {
+pub trait IO {
+    fn push_input(&mut self, val: i64);
+    fn pop_input(&mut self) -> i64;
+
+    fn push_output(&mut self, val: i64);
+    fn pop_output(&mut self) -> i64;
+}
+
+pub struct NoIO;
+
+impl IO for NoIO {
+    fn push_input(&mut self, _: i64) {}
+    fn pop_input(&mut self) -> i64 { 0 }
+
+    fn push_output(&mut self, _: i64) {}
+    fn pop_output(&mut self) -> i64 { 0 }
+}
+
+pub struct SingleIO {
+    val: i64,
+}
+
+impl SingleIO {
+    pub fn new() -> Self { Self { val:0 } }
+    pub fn new_init(val: i64) -> Self { Self { val } }
+}
+
+impl IO for SingleIO {
+    fn push_input(&mut self, val: i64) { self.val = val; }
+    fn pop_input(&mut self) -> i64 { self.val }
+
+    fn push_output(&mut self, val: i64) { self.val = val; }
+    fn pop_output(&mut self) -> i64 { self.val }
+}
+
+pub struct QueueIO {
+    input: VecDeque<i64>,
+    output: VecDeque<i64>,
+}
+
+impl QueueIO {
+    pub fn new() -> Self {
+        Self {
+            input: VecDeque::new(),
+            output: VecDeque::new(),
+        }
+    }
+
+    pub fn new_init(init: Vec<i64>) -> Self {
+        Self {
+            input: VecDeque::from(init),
+            output: VecDeque::new(),
+        }
+    }
+}
+
+impl IO for QueueIO {
+    fn push_input(&mut self, val: i64) {
+        self.input.push_back(val);
+    }
+
+    fn pop_input(&mut self) -> i64 {
+        self.input.pop_front().expect("No input available")
+    }
+
+    fn push_output(&mut self, val: i64) {
+        self.output.push_back(val);
+    }
+
+    fn pop_output(&mut self) -> i64 {
+        self.output.pop_front().expect("No output available")
+    }
+}
+
+pub struct AsyncIO {
+    tx: Vec<Sender<i64>>,
+    rx: Option<Receiver<i64>>,
+    input: Vec<i64>,
+}
+
+impl AsyncIO {
+    pub fn new() -> Self {
+        Self {
+            tx: Vec::new(),
+            rx: None,
+            input: Vec::new(),
+        }
+    }
+
+    pub fn new_init(input: Vec<i64>) -> Self {
+        Self {
+            tx: Vec::new(),
+            rx: None,
+            input,
+        }
+    }
+
+    pub fn get_receiver(&mut self) -> Receiver<i64> {
+        let (tx, rx) = channel();
+        self.tx.push(tx);
+        rx
+    }
+
+    pub fn set_receiver(&mut self, rx: Receiver<i64>) {
+        self.rx = Some(rx);
+    }
+}
+
+impl IO for AsyncIO {
+    fn push_input(&mut self, val: i64) {
+        self.input.push(val);
+    }
+
+    fn pop_input(&mut self) -> i64 {
+        if let Some(val) = self.input.pop() {
+            val
+        }
+        else if let Some(rx) = &self.rx {
+            rx.recv().unwrap()
+        }
+        else {
+            0
+        }
+    }
+
+    fn push_output(&mut self, val: i64) {
+        for tx in &self.tx {
+            let _ = tx.send(val);
+        }
+    }
+
+    fn pop_output(&mut self) -> i64 {
+        unimplemented!()
+    }
+}
+
+pub struct IntcodeComputer<T>
+    where T: IO {
+    pub io: T,
+    memory: Vec<i64>,
+    pc: usize,
+}
+
+impl<T> IntcodeComputer<T>
+    where T: IO {
+    pub fn new(memory: &mut Vec<i64>, io: T) -> IntcodeComputer<T> {
         IntcodeComputer {
             memory: memory.clone(),
             pc: 0,
-            input,
-            output: Vec::new(),
+            io,
         }
     }
 
@@ -115,10 +264,6 @@ impl IntcodeComputer {
         self.memory[addr] = val;
     }
 
-    pub fn get_output(&self) -> &Vec<i64> {
-        &self.output
-    }
-
     fn get_instruction(&self) -> Instruction {
         decode_instruction(self.read(self.pc))
     }
@@ -167,12 +312,13 @@ impl IntcodeComputer {
 
     fn input(&mut self) {
         let addr = self.read(self.pc + 1) as usize;
-        self.write(addr, self.input);
+        let val = self.io.pop_input();
+        self.write(addr, val);
     }
 
     fn output(&mut self, mode: ParameterMode) {
         let val = self.get_val(self.read(self.pc + 1), mode);
-        self.output.push(val);
+        self.io.push_output(val);
     }
 
     fn jump_not_zero(&mut self, modes: (ParameterMode, ParameterMode)) {
@@ -236,16 +382,15 @@ mod tests {
     }
 
     fn test_program(mut program: Vec<i64>, expected_output: Vec<i64>) {
-        let mut computer = IntcodeComputer::new(&mut program, 0);
+        let mut computer = IntcodeComputer::new(&mut program, NoIO);
         computer.run();
         assert_eq!(computer.memory, expected_output);
     }
 
     fn test_program_output(mut program: Vec<i64>, input: i64, expected_output: i64) {
-        let mut computer = IntcodeComputer::new(&mut program, input);
+        let mut computer = IntcodeComputer::new(&mut program, SingleIO::new_init(input));
         computer.run();
-        let output = computer.get_output().last().unwrap();
-        assert_eq!(*computer.get_output().last().unwrap(), expected_output);
+        assert_eq!(computer.io.pop_output(), expected_output);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use crate::solver::Solver;
-use crate::intcode_computer::IntcodeComputer;
-use std::io::{self, BufReader, Read};
+use crate::intcode_computer::{IntcodeComputer, NoIO, read_program};
+use std::io::Read;
 
 pub struct Problem;
 
@@ -9,11 +9,8 @@ impl Solver for Problem {
     type Output1 = i64;
     type Output2 = i64;
 
-    fn parse_input<R: io::Read>(&self, r: R) -> Self::Input {
-        let mut r = BufReader::new(r);
-        let mut s = String::new();
-        r.read_to_string(&mut s).unwrap();
-        s.split(',').flat_map(|n| n.parse()).collect()
+    fn parse_input<R: Read>(&self, r: R) -> Self::Input {
+        read_program(r)
     }
 
     fn solve_first(&self, input: &Self::Input) -> Self::Output1 {
@@ -21,7 +18,7 @@ impl Solver for Problem {
         memory[1] = 12;
         memory[2] = 2;
 
-        let mut computer = IntcodeComputer::new(&mut memory, 0);
+        let mut computer = IntcodeComputer::new(&mut memory, NoIO);
         computer.run();
         computer.read(0)
     }
@@ -33,7 +30,7 @@ impl Solver for Problem {
                 memory[1] = noun;
                 memory[2] = verb;
 
-                let mut computer = IntcodeComputer::new(&mut memory, 0);
+                let mut computer = IntcodeComputer::new(&mut memory, NoIO);
 
                 computer.run();
 

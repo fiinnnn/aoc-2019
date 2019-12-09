@@ -1,6 +1,6 @@
 use crate::solver::Solver;
-use std::io::{self, BufReader, Read};
-use crate::intcode_computer::IntcodeComputer;
+use crate::intcode_computer::{IntcodeComputer, IO, SingleIO, read_program};
+use std::io::Read;
 
 pub struct Problem;
 
@@ -9,24 +9,21 @@ impl Solver for Problem {
     type Output1 = i64;
     type Output2 = i64;
 
-    fn parse_input<R: io::Read>(&self, r: R) -> Self::Input {
-        let mut r = BufReader::new(r);
-        let mut s = String::new();
-        r.read_to_string(&mut s).unwrap();
-        s.split(',').flat_map(|n| n.parse()).collect()
+    fn parse_input<R: Read>(&self, r: R) -> Self::Input {
+        read_program(r)
     }
 
     fn solve_first(&self, input: &Self::Input) -> Self::Output1 {
         let mut program = input.clone();
-        let mut computer = IntcodeComputer::new(&mut program, 1);
+        let mut computer = IntcodeComputer::new(&mut program, SingleIO::new_init(1));
         computer.run();
-        computer.get_output().last().expect("Can't get last output value").clone()
+        computer.io.pop_output()
     }
 
     fn solve_second(&self, input: &Self::Input) -> Self::Output2 {
         let mut program = input.clone();
-        let mut computer = IntcodeComputer::new(&mut program, 5);
+        let mut computer = IntcodeComputer::new(&mut program, SingleIO::new_init(5));
         computer.run();
-        computer.get_output().last().expect("Can't get last output value").clone()
+        computer.io.pop_output()
     }
 }
