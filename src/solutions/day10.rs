@@ -1,6 +1,6 @@
 use crate::solver::Solver;
 use std::io::{Read, BufRead, BufReader};
-use std::collections::{HashSet, HashMap};
+use std::collections::HashMap;
 use num::Integer;
 use std::f64::consts::PI;
 
