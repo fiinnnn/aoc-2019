@@ -20,18 +20,6 @@ enum Tile {
     Ball,
 }
 
-impl Tile {
-    fn to_char(&self) -> char {
-        match self {
-            Tile::Empty => ' ',
-            Tile::Wall => '█',
-            Tile::Block => '▭',
-            Tile::Paddle => '▂',
-            Tile::Ball => '●',
-        }
-    }
-}
-
 impl From<i64> for Tile {
     fn from(n: i64) -> Self {
         match n {
@@ -85,7 +73,7 @@ impl Solver for Problem {
         let mut paddle_x = 0;
         let mut score = 0;
 
-        while let Ok((x, y, tile)) = recv_tile(&rx) {
+        while let Ok((x, _y, tile)) = recv_tile(&rx) {
             if x == -1 {
                 score = tile;
                 continue;
