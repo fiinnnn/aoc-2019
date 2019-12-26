@@ -187,7 +187,7 @@ impl IO for AsyncIO {
             val
         }
         else if let Some(rx) = &self.rx {
-            rx.recv().unwrap()
+            rx.recv().unwrap_or(0)
         }
         else {
             0
