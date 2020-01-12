@@ -21,7 +21,7 @@ impl Solver for Problem {
         let mut cpu = IntcodeComputer::new(&mut program, io);
 
         // start intcode computer
-        let _ = thread::spawn(move || cpu.run());
+        let handle = thread::spawn(move || cpu.run());
 
         let mut grid = Grid::new();
 
@@ -71,6 +71,9 @@ impl Solver for Problem {
             println!("Path length: {}", path.len());
             thread::sleep(Duration::from_millis(40));
         }
+
+        drop(tx);
+        let _ = handle.join();
 
         grid.oxygen.insert(grid.oxygen_system.unwrap());
 
