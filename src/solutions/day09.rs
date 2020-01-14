@@ -15,13 +15,13 @@ impl Solver for Problem {
     }
 
     fn solve_first(&self, input: &Self::Input) -> Self::Output1 {
-        let mut cpu = IntcodeComputer::new(&mut input.clone(), SingleIO::new_init(1));
+        let mut cpu = IntcodeComputer::new(&mut input.clone(), SingleIO::new(1));
         cpu.run();
         cpu.io.pop_output()
     }
 
     fn solve_second(&self, input: &Self::Input) -> Self::Output2 {
-        let mut cpu = IntcodeComputer::new(&mut input.clone(), SingleIO::new_init(2));
+        let mut cpu = IntcodeComputer::new(&mut input.clone(), SingleIO::new(2));
         cpu.run();
         cpu.io.pop_output()
     }
