@@ -1,5 +1,4 @@
 use std::error::Error;
-use std::fs;
 use std::fs::read_dir;
 use std::fs::File;
 use std::io;
@@ -8,16 +7,14 @@ use std::path::{Path, PathBuf};
 use std::str;
 
 fn days(input_dir: &str) -> io::Result<Vec<u32>> {
-    Ok(read_dir(input_dir)?
+    let mut days = read_dir(input_dir)?
         .flatten()
         .filter(|e| e.path().is_file())
         .flat_map(|e| e.file_name().into_string())
-        .flat_map(|s| {
-            str::from_utf8(&s.into_bytes()[3..])
-                .ok()
-                .and_then(|v| v.parse::<u32>().ok())
-        })
-        .collect())
+        .flat_map(|s| s[3..].parse::<u32>())
+        .collect::<Vec<_>>();
+    days.sort();
+    Ok(days)
 }
 
 fn gen_solutions_mod<P: AsRef<Path>>(p: P, days: &Vec<u32>) -> io::Result<()> {
@@ -96,8 +93,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let output_dir = "./src/solutions";
     let solutions_mod_output_path = Path::new(&output_dir).join("mod.rs");
 
-    let mut days = days(input_dir)?;
-    days.sort();
+    let days = days(input_dir)?;
 
     gen_solutions_mod(&solutions_mod_output_path, &days)?;
 
