@@ -17,12 +17,12 @@ impl Solver for Problem {
     fn solve_first(&self, input: &Self::Input) -> Self::Output1 {
         let mut cpu = IntcodeComputer::new(&mut input.clone(), SingleIO::new(1));
         cpu.run();
-        cpu.io.pop_output()
+        cpu.io.read().unwrap()
     }
 
     fn solve_second(&self, input: &Self::Input) -> Self::Output2 {
         let mut cpu = IntcodeComputer::new(&mut input.clone(), SingleIO::new(2));
         cpu.run();
-        cpu.io.pop_output()
+        cpu.io.read().unwrap()
     }
 }

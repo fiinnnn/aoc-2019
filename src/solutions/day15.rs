@@ -1,7 +1,12 @@
 use crate::solver::Solver;
 use crate::intcode_computer::{IntcodeComputer, AsyncIO, read_program};
-use std::{io::Read, collections::HashSet, iter::repeat, sync::mpsc::channel, thread};
-use std::time::Duration;
+use std::{
+    io::Read,
+    collections::HashSet,
+    iter::repeat,
+    thread,
+    time::Duration
+};
 
 pub struct Problem;
 
@@ -14,10 +19,7 @@ impl Solver for Problem {
         let mut program = read_program(r);
 
         // intcode setup
-        let mut io = AsyncIO::new();
-        let (tx, rx) = channel();
-        io.set_receiver(rx);
-        let rx = io.get_receiver();
+        let (io, tx, rx) = AsyncIO::new();
         let mut cpu = IntcodeComputer::new(&mut program, io);
 
         // start intcode computer

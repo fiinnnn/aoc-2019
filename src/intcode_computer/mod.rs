@@ -18,6 +18,7 @@ pub fn read_program<R: Read>(r: R) -> Vec<i64> {
 pub struct IntcodeComputer<T>
     where T: IO {
     pub io: T,
+    halted: bool,
     memory: Vec<i64>,
     pc: usize,
     rel_base: i64,
@@ -28,6 +29,7 @@ impl<T> IntcodeComputer<T>
     pub fn new(memory: &mut Vec<i64>, io: T) -> IntcodeComputer<T> {
         IntcodeComputer {
             io,
+            halted: false,
             memory: memory.clone(),
             pc: 0,
             rel_base: 0,
@@ -35,7 +37,7 @@ impl<T> IntcodeComputer<T>
     }
 
     pub fn run(&mut self) {
-        loop {
+        while !self.halted {
             let instruction = self.get_instruction();
 
             match instruction {
@@ -73,7 +75,7 @@ impl<T> IntcodeComputer<T>
                     self.adjust_rel_base(mode);
                     self.inc_pc(2);
                 }
-                Instruction::HLT => break,
+                Instruction::HLT => self.halted = true,
             }
         }
     }
@@ -152,13 +154,17 @@ impl<T> IntcodeComputer<T>
 
     fn input(&mut self,  mode: ParameterMode) {
         let addr = self.get_dest(self.read(self.pc + 1), mode) as usize;
-        let val = self.io.pop_input();
-        self.write(addr, val);
+        if let Ok(val) = self.io.read() {
+            self.write(addr, val);
+        }
+        else {
+            self.halted = true;
+        }
     }
 
     fn output(&mut self, mode: ParameterMode) {
         let val = self.get_val(self.read(self.pc + 1), mode);
-        self.io.push_output(val);
+        self.io.write(val);
     }
 
     fn jump_not_zero(&mut self, modes: (ParameterMode, ParameterMode)) {
@@ -246,7 +252,7 @@ mod tests {
     fn test_program_output(mut program: Vec<i64>, input: i64, expected_output: i64) {
         let mut computer = IntcodeComputer::new(&mut program, SingleIO::new(input));
         computer.run();
-        assert_eq!(computer.io.pop_output(), expected_output);
+        assert_eq!(computer.io.read().unwrap(), expected_output);
     }
 
     #[test]

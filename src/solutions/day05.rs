@@ -17,13 +17,13 @@ impl Solver for Problem {
         let mut program = input.clone();
         let mut computer = IntcodeComputer::new(&mut program, SingleIO::new(1));
         computer.run();
-        computer.io.pop_output()
+        computer.io.read().unwrap()
     }
 
     fn solve_second(&self, input: &Self::Input) -> Self::Output2 {
         let mut program = input.clone();
         let mut computer = IntcodeComputer::new(&mut program, SingleIO::new(5));
         computer.run();
-        computer.io.pop_output()
+        computer.io.read().unwrap()
     }
 }

@@ -2,12 +2,12 @@ use crate::solver::Solver;
 use crate::intcode_computer::{IntcodeComputer, AsyncIO, read_program};
 use std::{
     io::Read,
-    sync::mpsc::{channel, Receiver},
     thread,
     collections::HashMap,
-    error::Error
+    error::Error,
+    cmp::Ordering,
+    sync::mpsc::Receiver
 };
-use std::cmp::Ordering;
 
 pub struct Problem;
 
@@ -45,8 +45,7 @@ impl Solver for Problem {
     fn solve_first(&self, input: &Self::Input) -> Self::Output1 {
         let mut tiles: HashMap<(i64, i64), Tile> = HashMap::new();
 
-        let mut io = AsyncIO::new();
-        let rx = io.get_receiver();
+        let (io, _, rx) = AsyncIO::new();
         let mut cpu = IntcodeComputer::new(&mut input.clone(), io);
 
         let handle = thread::spawn(move || { cpu.run() });
@@ -61,10 +60,7 @@ impl Solver for Problem {
     }
 
     fn solve_second(&self, input: &Self::Input) -> Self::Output2 {
-        let mut io = AsyncIO::new();
-        let (tx, rx) = channel();
-        io.set_receiver(rx);
-        let rx = io.get_receiver();
+        let (io, tx, rx) = AsyncIO::new();
         let mut cpu = IntcodeComputer::new(&mut input.clone(), io);
         cpu.write(0, 2);
 

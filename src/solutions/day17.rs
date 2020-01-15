@@ -2,7 +2,6 @@ use crate::solver::Solver;
 use crate::intcode_computer::{IntcodeComputer, AsyncIO, read_program};
 use std::{
     io::Read,
-    sync::mpsc::channel,
     thread,
     iter::from_fn,
     str::FromStr,
@@ -25,10 +24,7 @@ impl Solver for Problem {
 
     fn solve_first(&self, input: &Self::Input) -> Self::Output1 {
         // intcode setup
-        let mut io = AsyncIO::new();
-        let (tx, rx) = channel();
-        io.set_receiver(rx);
-        let rx = io.get_receiver();
+        let (io, tx, rx) = AsyncIO::new();
         let mut cpu = IntcodeComputer::new(&mut input.clone(), io);
 
         let handle = thread::spawn(move || cpu.run());

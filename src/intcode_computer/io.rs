@@ -1,24 +1,22 @@
 use std::{
-    collections::VecDeque,
-    sync::mpsc::{channel, Receiver, Sender}
+    sync::mpsc::{channel, Receiver, Sender},
+    io::{
+        Result,
+        Error,
+        ErrorKind
+    }
 };
 
 pub trait IO {
-    fn push_input(&mut self, val: i64);
-    fn pop_input(&mut self) -> i64;
-
-    fn push_output(&mut self, val: i64);
-    fn pop_output(&mut self) -> i64;
+    fn read(&mut self) -> Result<i64>;
+    fn write(&mut self, val: i64);
 }
 
 pub struct NoIO;
 
 impl IO for NoIO {
-    fn push_input(&mut self, _: i64) {}
-    fn pop_input(&mut self) -> i64 { 0 }
-
-    fn push_output(&mut self, _: i64) {}
-    fn pop_output(&mut self) -> i64 { 0 }
+    fn read(&mut self) -> Result<i64> { Ok(0) }
+    fn write(&mut self, _: i64) {}
 }
 
 pub struct SingleIO {
@@ -30,100 +28,58 @@ impl SingleIO {
 }
 
 impl IO for SingleIO {
-    fn push_input(&mut self, val: i64) { self.val = val; }
-    fn pop_input(&mut self) -> i64 { self.val }
-
-    fn push_output(&mut self, val: i64) { self.val = val; }
-    fn pop_output(&mut self) -> i64 { self.val }
-}
-
-pub struct QueueIO {
-    input: VecDeque<i64>,
-    output: VecDeque<i64>,
-}
-
-impl QueueIO {
-    pub fn new() -> Self {
-        Self {
-            input: VecDeque::new(),
-            output: VecDeque::new(),
-        }
-    }
-
-    pub fn new_init(init: Vec<i64>) -> Self {
-        Self {
-            input: VecDeque::from(init),
-            output: VecDeque::new(),
-        }
-    }
-}
-
-impl IO for QueueIO {
-    fn push_input(&mut self, val: i64) { self.input.push_back(val); }
-    fn pop_input(&mut self) -> i64 { self.input.pop_front().expect("No input available") }
-
-    fn push_output(&mut self, val: i64) { self.output.push_back(val); }
-    fn pop_output(&mut self) -> i64 { self.output.pop_front().expect("No output available") }
+    fn read(&mut self) -> Result<i64> { Ok(self.val) }
+    fn write(&mut self, val: i64) { self.val = val; }
 }
 
 pub struct AsyncIO {
-    tx: Vec<Sender<i64>>,
-    rx: Option<Receiver<i64>>,
-    input: Vec<i64>,
+    tx: Sender<i64>,
+    rx: Receiver<i64>,
 }
 
 impl AsyncIO {
-    pub fn new() -> Self {
-        Self {
-            tx: Vec::new(),
-            rx: None,
-            input: Vec::new(),
-        }
-    }
+    pub fn new() -> (Self, Sender<i64>, Receiver<i64>) {
+        let (tx_in, rx_in) = channel();
+        let (tx_out, rx_out) = channel();
 
-    pub fn new_init(input: Vec<i64>) -> Self {
-        Self {
-            tx: Vec::new(),
-            rx: None,
-            input,
-        }
-    }
+        let io = Self {
+            tx: tx_out,
+            rx: rx_in,
+        };
 
-    pub fn get_receiver(&mut self) -> Receiver<i64> {
-        let (tx, rx) = channel();
-        self.tx.push(tx);
-        rx
-    }
-
-    pub fn set_receiver(&mut self, rx: Receiver<i64>) {
-        self.rx = Some(rx);
+        (io, tx_in, rx_out)
     }
 }
 
 impl IO for AsyncIO {
-    fn push_input(&mut self, val: i64) {
-        self.input.push(val);
+    fn read(&mut self) -> Result<i64> {
+        self.rx.recv()
+            .map_err(|e| Error::new(ErrorKind::BrokenPipe, e))
     }
 
-    fn pop_input(&mut self) -> i64 {
-        if let Some(val) = self.input.pop() {
-            val
-        }
-        else if let Some(rx) = &self.rx {
-            rx.recv().unwrap_or(0)
-        }
-        else {
-            0
+    fn write(&mut self, val: i64) {
+        let _ = self.tx.send(val);
+    }
+}
+
+pub struct Pipe {
+    rx: Receiver<i64>,
+    tx: Vec<Sender<i64>>,
+}
+
+impl Pipe {
+    pub fn new(rx: Receiver<i64>, tx: Vec<Sender<i64>>) -> Self {
+        Self {
+            tx,
+            rx,
         }
     }
 
-    fn push_output(&mut self, val: i64) {
-        for tx in &self.tx {
-            let _ = tx.send(val);
+    pub fn run(&self) {
+        while let Ok(val) = self.rx.recv() {
+            for tx in &self.tx {
+                let _ = tx.send(val);
+            }
         }
-    }
-
-    fn pop_output(&mut self) -> i64 {
-        unimplemented!()
     }
 }

@@ -1,10 +1,11 @@
 use crate::solver::Solver;
 use crate::intcode_computer::{IntcodeComputer, AsyncIO, read_program};
-use std::io::Read;
-use std::iter::repeat;
-use std::collections::HashSet;
-use std::sync::mpsc;
-use std::thread;
+use std::{
+    io::Read,
+    iter::repeat,
+    collections::HashSet,
+    thread
+};
 
 pub struct Problem;
 
@@ -136,11 +137,7 @@ impl Solver for Problem {
 }
 
 fn paint_grid(grid: &mut Grid, program: &mut Vec<i64>) {
-    let mut io = AsyncIO::new();
-    let (tx, rx) = mpsc::channel();
-    io.set_receiver(rx);
-    let rx = io.get_receiver();
-
+    let (io, tx, rx) = AsyncIO::new();
     let mut cpu = IntcodeComputer::new(program, io);
 
     let handle = thread::spawn(move || cpu.run());
